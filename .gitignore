@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+trading_log.json
+scan_log.json
+agent_state.json
+pids.json
+scanner.pid
+*.log
+nohup.out
