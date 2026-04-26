@@ -361,7 +361,15 @@ def run_single_scan(log_data: dict) -> dict:
     # ── 3. Détection et exécution des setups ───────────────────
     traded_this_cycle = log_data.get("traded_setups", [])
 
-    if not ks.active:
+    # Vérifier le flag pause
+    try:
+        import json as _json
+        with open("trading_flag.json") as _f:
+            _trading_active = _json.load(_f).get("trading_active", True)
+    except Exception:
+        _trading_active = True
+
+    if not ks.active and _trading_active:
         _log("Détection des setups...")
         for asset, rule in SETUP_RULES.items():
             snap = snapshot.assets.get(asset)
@@ -375,6 +383,8 @@ def run_single_scan(log_data: dict) -> dict:
                 executed = execute_setup(snap, rule, account, traded_this_cycle)
                 if executed:
                     traded_this_cycle.append(f"{asset}:{rule['direction']}")
+    elif not _trading_active:
+        _log("Trading SUSPENDU via /pause — aucun trade")
     else:
         _log(f"KILL SWITCH ACTIF: {ks.reason} — aucun trade")
 

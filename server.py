@@ -20,9 +20,10 @@ def _run_agent(fn, name):
 
 # ── Agents en background ───────────────────────────────────────
 for agent_name, module_path, fn_name in [
-    ("MACRO",  "agents.agent_macro", "run"),
-    ("EXEC",   "agents.agent_exec",  "run"),
-    ("SIGNAL", "auto_scanner",       "main"),
+    ("MACRO",      "agents.agent_macro", "run"),
+    ("EXEC",       "agents.agent_exec",  "run"),
+    ("SIGNAL",     "auto_scanner",       "main"),
+    ("TELEGRAM",   "telegram_bot",       "run"),
 ]:
     try:
         import importlib
