@@ -18,30 +18,26 @@ def _run_agent(fn, name):
         print(f"[{name}] ERREUR: {e}", flush=True)
 
 
-# ── Démarrer les agents en threads background ──────────────────
-try:
-    from agents.agent_macro import run as macro_run
-    threading.Thread(target=_run_agent, args=(macro_run, "MACRO"), daemon=True).start()
-except Exception as e:
-    print(f"[MACRO] import error: {e}", flush=True)
+# ── Agents en background ───────────────────────────────────────
+for agent_name, module_path, fn_name in [
+    ("MACRO",  "agents.agent_macro", "run"),
+    ("EXEC",   "agents.agent_exec",  "run"),
+    ("SIGNAL", "auto_scanner",       "main"),
+]:
+    try:
+        import importlib
+        mod = importlib.import_module(module_path)
+        fn  = getattr(mod, fn_name)
+        threading.Thread(target=_run_agent, args=(fn, agent_name), daemon=True).start()
+        print(f"[{agent_name}] thread lancé", flush=True)
+    except Exception as e:
+        print(f"[{agent_name}] import error: {e}", flush=True)
 
-try:
-    from agents.agent_exec import run as exec_run
-    threading.Thread(target=_run_agent, args=(exec_run, "EXEC"), daemon=True).start()
-except Exception as e:
-    print(f"[EXEC] import error: {e}", flush=True)
-
-try:
-    from auto_scanner import main as signal_run
-    threading.Thread(target=_run_agent, args=(signal_run, "SIGNAL"), daemon=True).start()
-except Exception as e:
-    print(f"[SIGNAL] import error: {e}", flush=True)
-
-# ── Démarrer Streamlit (processus principal) ───────────────────
+# ── Streamlit ──────────────────────────────────────────────────
 port = os.environ.get("PORT", "8501")
 print(f"Démarrage Streamlit sur port {port}...", flush=True)
 
-proc = subprocess.Popen([
+os.execv(sys.executable, [
     sys.executable, "-m", "streamlit", "run", "dashboard.py",
     "--server.port",    str(port),
     "--server.address", "0.0.0.0",
@@ -50,6 +46,3 @@ proc = subprocess.Popen([
     "--server.enableXsrfProtection", "false",
     "--server.enableWebsocketCompression", "false",
 ])
-
-print(f"Aegis actif sur port {port}", flush=True)
-proc.wait()
