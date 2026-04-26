@@ -289,6 +289,9 @@ def execute_setup(snap: TechnicalSnapshot, rule: dict, account: dict, traded_set
 
     # ── Soumission ordre ───────────────────────────────────────
     try:
+        import telegram_notify as tg
+        tg.setup_detected(asset, direction, snap.price, signals.get("rsi_signal", ""), rule["label"])
+
         order = submit_bracket_order(
             symbol=asset,
             qty=pos["shares"],
@@ -299,9 +302,10 @@ def execute_setup(snap: TechnicalSnapshot, rule: dict, account: dict, traded_set
         fill_price = get_filled_entry_price(order["id"]) or snap.price
         open_trade(trade_id, order["id"], fill_price)
 
-        _notify(
-            f"AEGIS ORDRE {asset}",
-            f"{direction.upper()} x{pos['shares']} | SL={sl} TP={tp} R:R={pos['rr']}"
+        tg.trade_opened(
+            asset=asset, direction=direction, qty=pos["shares"],
+            entry=fill_price, sl=sl, tp=tp, rr=pos["rr"],
+            segment=segment, equity=account["equity"],
         )
         _log(f"  Ordre soumis: {order}")
         return True
@@ -345,10 +349,12 @@ def run_single_scan(log_data: dict) -> dict:
 
     if ks.active and not prev_ks:
         log_kill_switch(ks.reason, ks.vix)
-        _notify("AEGIS KILL SWITCH", ks.reason or "Marché irrationnel")
+        import telegram_notify as tg
+        tg.kill_switch(ks.reason or "Marché irrationnel")
 
     if not ks.active and prev_ks:
-        _notify("AEGIS Kill Switch CLEAR", "Conditions normalisées — reprise du scan")
+        import telegram_notify as tg
+        tg.kill_switch_clear()
 
     log_data["last_kill_switch"] = ks.active
 

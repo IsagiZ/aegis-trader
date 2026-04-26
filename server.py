@@ -35,6 +35,13 @@ for agent_name, module_path, fn_name in [
 
 # ── Streamlit ──────────────────────────────────────────────────
 port = os.environ.get("PORT", "8501")
+# Message de démarrage Telegram
+try:
+    import telegram_notify as tg
+    tg.startup()
+except Exception:
+    pass
+
 print(f"Démarrage Streamlit sur port {port}...", flush=True)
 
 os.execv(sys.executable, [

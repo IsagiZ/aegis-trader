@@ -70,8 +70,27 @@ def run():
                         tlog = update_signal_scores(tlog, closed_trade, reason)
                         _save_tlog(tlog)
 
-                    emoji = "✅" if reason == "tp" else "❌"
-                    _notify(f"AEGIS {emoji} {trade['asset']}", f"{reason.upper()} | P&L: {'+' if pnl >= 0 else ''}{pnl:.2f}$")
+                    # Telegram résumé complet
+                    try:
+                        import telegram_notify as tg
+                        tlog2 = _load_tlog()
+                        all_closed = [t for t in tlog2["trades"] if t["status"] == "closed"]
+                        wins = [t for t in all_closed if (t.get("pnl") or 0) > 0]
+                        win_rate = round(len(wins) / len(all_closed) * 100) if all_closed else 0
+                        entry_price = trade["actual"].get("entry") or trade["planned"]["entry"]
+                        tg.trade_closed(
+                            asset=trade["asset"],
+                            direction=trade["direction"],
+                            reason=reason,
+                            entry=entry_price,
+                            exit_price=exit_price,
+                            pnl=pnl,
+                            equity=account["equity"],
+                            total_trades=len(all_closed),
+                            win_rate=win_rate,
+                        )
+                    except Exception as te:
+                        print(f"[TELEGRAM] erreur: {te}", flush=True)
                     closed_count += 1
 
             state = load_state()
