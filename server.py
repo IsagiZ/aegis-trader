@@ -36,6 +36,15 @@ for agent_name, module_path, fn_name in [
 
 # ── Streamlit ──────────────────────────────────────────────────
 port = os.environ.get("PORT", "8501")
+# Initialiser l'état des agents au démarrage
+try:
+    from shared_state import update_agent, set_bot_running
+    for a in ["MACRO", "SIGNAL", "EXEC", "TELEGRAM", "MEMORY"]:
+        update_agent(a, "ACTIVE", "Démarré")
+    set_bot_running(os.getpid())
+except Exception as e:
+    print(f"[STATE] init error: {e}", flush=True)
+
 # Message de démarrage Telegram
 try:
     import telegram_notify as tg

@@ -205,31 +205,31 @@ def _load_json(path: str) -> dict:
 
 
 def _is_running() -> bool:
-    import psutil
-    state = _load_json("agent_state.json")
-    pid   = state.get("bot_pid")
-    if not pid:
-        return False
     try:
-        return psutil.Process(int(pid)).is_running()
+        flag = _load_json("trading_flag.json")
+        return flag.get("trading_active", True)
     except Exception:
-        return False
+        return True
 
 
 def _start_bot():
-    proc = subprocess.Popen(
-        [sys.executable, "launcher.py", "start"],
-        cwd=str(Path(__file__).parent),
-    )
-    proc.wait()
+    with open("trading_flag.json", "w") as f:
+        json.dump({"trading_active": True}, f)
+    try:
+        import telegram_notify as tg
+        tg.send("⚡ AEGIS ACTIVÉ", "Trading activé depuis le dashboard.")
+    except Exception:
+        pass
 
 
 def _stop_bot():
-    proc = subprocess.Popen(
-        [sys.executable, "launcher.py", "stop"],
-        cwd=str(Path(__file__).parent),
-    )
-    proc.wait()
+    with open("trading_flag.json", "w") as f:
+        json.dump({"trading_active": False}, f)
+    try:
+        import telegram_notify as tg
+        tg.send("⏸ AEGIS SUSPENDU", "Trading suspendu depuis le dashboard.")
+    except Exception:
+        pass
 
 
 def _trend_html(trend: str) -> str:

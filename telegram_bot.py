@@ -213,30 +213,60 @@ HELP_TEXT = (
 )
 
 
+def _get_offset() -> int:
+    """Récupère le dernier update_id pour ignorer les vieux messages."""
+    try:
+        resp = requests.get(f"{BASE}/getUpdates", params={"offset": -1}, timeout=10)
+        results = resp.json().get("result", [])
+        if results:
+            return results[-1]["update_id"] + 1
+    except Exception:
+        pass
+    return 0
+
+
 def run():
     print("[TELEGRAM BOT] Démarré — en écoute des commandes", flush=True)
-    offset = 0
+
+    # Ignorer tous les messages déjà reçus avant ce démarrage
+    offset = _get_offset()
+    print(f"[TELEGRAM BOT] Offset initial: {offset}", flush=True)
 
     while True:
         try:
-            resp = requests.get(f"{BASE}/getUpdates",
-                                params={"offset": offset, "timeout": 30},
-                                timeout=35)
-            data = resp.json()
+            resp = requests.get(
+                f"{BASE}/getUpdates",
+                params={"offset": offset, "timeout": 20},
+                timeout=25,
+            )
+            if not resp.ok:
+                time.sleep(5)
+                continue
 
+            data = resp.json()
             for update in data.get("result", []):
                 offset = update["update_id"] + 1
                 msg    = update.get("message", {})
-                text   = msg.get("text", "").strip().lower().split()[0]
-                cid    = str(msg.get("chat", {}).get("id", ""))
+                if not msg:
+                    continue
+                text = msg.get("text", "").strip().split()[0].lower()
+                cid  = str(msg.get("chat", {}).get("id", ""))
 
                 if cid != CHAT_ID:
                     continue
 
-                if text in COMMANDS:
-                    COMMANDS[text]()
-                elif text in ["/start", "/help"]:
-                    _send(HELP_TEXT)
+                print(f"[TELEGRAM BOT] Commande reçue: {text}", flush=True)
+
+                try:
+                    if text in COMMANDS:
+                        COMMANDS[text]()
+                    elif text in ["/start", "/help"]:
+                        _send(HELP_TEXT)
+                    else:
+                        _send("Commande inconnue. Tape /help pour voir les commandes disponibles.")
+                except Exception as cmd_err:
+                    print(f"[TELEGRAM BOT] Erreur commande {text}: {cmd_err}", flush=True)
+                    _send(f"❌ Erreur: {cmd_err}")
 
         except Exception as e:
             print(f"[TELEGRAM BOT] polling error: {e}", flush=True)
