@@ -53,19 +53,10 @@ for agent_name, module_path, fn_name in [
     except Exception as e:
         print(f"[{agent_name}] import error: {e}", flush=True)
 
-# ── Streamlit en subprocess (NE PAS utiliser os.execv) ─────────
-port = os.environ.get("PORT", "8501")
-print(f"Démarrage Streamlit sur port {port}...", flush=True)
+# ── API Flask sur $PORT ────────────────────────────────────────
+port = int(os.environ.get("PORT", "8501"))
+print(f"Démarrage API Flask sur port {port}...", flush=True)
 
-proc = subprocess.Popen([
-    sys.executable, "-m", "streamlit", "run", "dashboard.py",
-    "--server.port",     str(port),
-    "--server.address",  "0.0.0.0",
-    "--server.headless", "true",
-    "--server.enableCORS",                "false",
-    "--server.enableXsrfProtection",      "false",
-    "--server.enableWebsocketCompression","false",
-])
-
+from api_server import run as _run_api
 print(f"Aegis actif — port {port}", flush=True)
-proc.wait()
+_run_api(port=port)
