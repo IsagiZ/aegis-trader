@@ -28,12 +28,14 @@ def get_positions() -> list:
     positions = _client.get_all_positions()
     return [
         {
-            "symbol":    p.symbol,
-            "qty":       float(p.qty),
-            "avg_entry": float(p.avg_entry_price),
-            "market_value": float(p.market_value),
+            "symbol":        p.symbol,
+            "qty":           float(p.qty),
+            "side":          str(p.side),
+            "avg_entry":     float(p.avg_entry_price),
+            "current_price": float(p.current_price) if p.current_price else 0.0,
+            "market_value":  float(p.market_value),
             "unrealized_pl": float(p.unrealized_pl),
-            "side":      p.side,
+            "unrealized_plpc": float(p.unrealized_plpc) if p.unrealized_plpc else 0.0,
         }
         for p in positions
     ]

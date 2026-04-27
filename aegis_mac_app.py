@@ -1,29 +1,28 @@
 """
 Aegis Command Center — Native macOS App
-Connects to the Render API and provides a real-time dark dashboard.
+Connects to the Render API for real-time trading data.
 
-Install deps once:  pip3 install customtkinter
-Run:                python3 aegis_mac_app.py
+Install once:  pip3 install customtkinter
+Run:           python3 aegis_mac_app.py
 """
 import threading
 import time
 import json
 import urllib.request
-import urllib.error
 from datetime import datetime
 
 try:
     import customtkinter as ctk
 except ImportError:
     import subprocess, sys
-    print("Installation de customtkinter...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "customtkinter", "-q"])
     import customtkinter as ctk
 
-# ── API Target ─────────────────────────────────────────────────
-API_BASE = "https://aegis-trader.onrender.com"
+# ── Config ─────────────────────────────────────────────────────
+API_BASE    = "https://aegis-trader.onrender.com"
+REFRESH_SEC = 5
 
-# ── Palette ────────────────────────────────────────────────────
+# ── Dark palette ───────────────────────────────────────────────
 BG      = "#060b14"
 PANEL   = "#0d1117"
 BORDER  = "#1e2a3a"
@@ -34,7 +33,6 @@ GREEN   = "#00ff88"
 YELLOW  = "#ffd700"
 RED     = "#ff4444"
 ORANGE  = "#ff9e64"
-BLUE    = "#7aa2f7"
 CYAN    = "#7dcfff"
 
 ctk.set_appearance_mode("dark")
@@ -59,49 +57,44 @@ def _post(path: str, payload: dict) -> dict:
         return json.loads(r.read().decode())
 
 
-# ── App ────────────────────────────────────────────────────────
+# ── Main app ───────────────────────────────────────────────────
 
 class AegisApp(ctk.CTk):
-
-    REFRESH_SEC = 5
 
     def __init__(self):
         super().__init__()
         self.title("⚡  AEGIS — Command Center")
-        self.geometry("1420x860")
-        self.minsize(1100, 700)
+        self.geometry("1440x920")
+        self.minsize(1100, 750)
         self.configure(fg_color=BG)
 
         self._data: dict      = {}
-        self._connected: bool = False
-        self._countdown: int  = self.REFRESH_SEC
-        self._scanning: bool  = False
+        self._connected       = False
+        self._countdown       = REFRESH_SEC
+        self._scanning        = False
 
         self._build_ui()
         self._start_bg_refresh()
         self._tick()
 
-    # ── Layout helpers ─────────────────────────────────────────
+    # ── Card helper ────────────────────────────────────────────
 
     def _card(self, parent, title: str, row: int, col: int,
               rowspan: int = 1, colspan: int = 1) -> ctk.CTkFrame:
         f = ctk.CTkFrame(parent, fg_color=PANEL, corner_radius=10,
                          border_width=1, border_color=BORDER)
         f.grid(row=row, column=col, rowspan=rowspan, columnspan=colspan,
-               padx=6, pady=6, sticky="nsew")
+               padx=6, pady=5, sticky="nsew")
         ctk.CTkLabel(f, text=title,
                      font=ctk.CTkFont("Courier New", 11, "bold"),
-                     text_color=DIM).pack(anchor="w", padx=16, pady=(13, 4))
+                     text_color=DIM).pack(anchor="w", padx=16, pady=(12, 3))
         return f
 
-    def _sep(self, parent) -> ctk.CTkFrame:
-        return ctk.CTkFrame(parent, height=1, fg_color=BORDER)
-
-    # ── Full UI build ──────────────────────────────────────────
+    # ── Full UI ────────────────────────────────────────────────
 
     def _build_ui(self):
-        # ── Header ────────────────────────────────────────────
-        hdr = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=0, height=56)
+        # Header
+        hdr = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=0, height=54)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
@@ -117,39 +110,41 @@ class AegisApp(ctk.CTk):
         self._lbl_tick = ctk.CTkLabel(hdr, text="",
                                       font=ctk.CTkFont("Courier New", 11),
                                       text_color=DIM)
-        self._lbl_tick.pack(side="right", padx=6)
+        self._lbl_tick.pack(side="right", padx=4)
 
-        # ── Body grid ─────────────────────────────────────────
+        # Body — 4 rows × 2 columns
         body = ctk.CTkFrame(self, fg_color=BG)
-        body.pack(fill="both", expand=True, padx=12, pady=10)
+        body.pack(fill="both", expand=True, padx=12, pady=8)
         body.columnconfigure(0, weight=1)
         body.columnconfigure(1, weight=1)
-        body.rowconfigure(0, weight=0)
-        body.rowconfigure(1, weight=1)
-        body.rowconfigure(2, weight=0)
+        body.rowconfigure(0, weight=0)   # agents + portfolio
+        body.rowconfigure(1, weight=0)   # positions live (full width)
+        body.rowconfigure(2, weight=1)   # scan + trades
+        body.rowconfigure(3, weight=0)   # actions
 
         self._build_agents(body)
         self._build_portfolio(body)
+        self._build_positions(body)
         self._build_scan(body)
         self._build_trades(body)
         self._build_actions(body)
 
-    # ── Panel: Agents ──────────────────────────────────────────
+    # ── Row 0 — Agents ─────────────────────────────────────────
 
     def _build_agents(self, parent):
         card = self._card(parent, "⬡  AGENTS", 0, 0)
         row  = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=16, pady=(0, 14))
+        row.pack(fill="x", padx=16, pady=(0, 12))
         row.columnconfigure((0, 1, 2, 3), weight=1)
 
         self._agent_widgets: dict = {}
         for i, name in enumerate(["MACRO", "SIGNAL", "EXEC", "TELEGRAM"]):
             box = ctk.CTkFrame(row, fg_color=ROW_ALT, corner_radius=7)
-            box.grid(row=0, column=i, padx=4, pady=4, sticky="ew")
+            box.grid(row=0, column=i, padx=4, pady=2, sticky="ew")
 
             ctk.CTkLabel(box, text=name,
                          font=ctk.CTkFont("Courier New", 10, "bold"),
-                         text_color=DIM).pack(pady=(11, 2))
+                         text_color=DIM).pack(pady=(10, 2))
 
             lbl_s = ctk.CTkLabel(box, text="○  OFFLINE",
                                  font=ctk.CTkFont("Courier New", 11, "bold"),
@@ -159,126 +154,148 @@ class AegisApp(ctk.CTk):
             lbl_m = ctk.CTkLabel(box, text="—",
                                  font=ctk.CTkFont("Courier New", 9),
                                  text_color=DIM, wraplength=130)
-            lbl_m.pack(pady=(1, 11))
+            lbl_m.pack(pady=(1, 10))
 
             self._agent_widgets[name] = (lbl_s, lbl_m)
 
-    # ── Panel: Portfolio ───────────────────────────────────────
+    # ── Row 0 — Portfolio metrics ──────────────────────────────
 
     def _build_portfolio(self, parent):
         card = self._card(parent, "💼  PORTFOLIO", 0, 1)
 
-        metrics_row = ctk.CTkFrame(card, fg_color="transparent")
-        metrics_row.pack(fill="x", padx=16, pady=(0, 8))
-        metrics_row.columnconfigure((0, 1, 2, 3), weight=1)
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(0, 8))
+        row.columnconfigure((0, 1, 2, 3), weight=1)
 
         self._metric_labels: dict = {}
-        specs = [
-            ("EQUITY",    "—", CYAN),
-            ("CASH",      "—", TEXT),
-            ("P&L TOTAL", "—", GREEN),
-            ("WIN RATE",  "—", YELLOW),
-        ]
-        for i, (label, val, color) in enumerate(specs):
-            box = ctk.CTkFrame(metrics_row, fg_color=ROW_ALT, corner_radius=7)
-            box.grid(row=0, column=i, padx=4, pady=4, sticky="ew")
-
+        for i, (label, color) in enumerate([
+            ("EQUITY",    CYAN),
+            ("CASH",      TEXT),
+            ("P&L TOTAL", GREEN),
+            ("WIN RATE",  YELLOW),
+        ]):
+            box = ctk.CTkFrame(row, fg_color=ROW_ALT, corner_radius=7)
+            box.grid(row=0, column=i, padx=4, pady=2, sticky="ew")
             ctk.CTkLabel(box, text=label,
                          font=ctk.CTkFont("Courier New", 9),
-                         text_color=DIM).pack(pady=(10, 2))
-
-            lbl = ctk.CTkLabel(box, text=val,
-                               font=ctk.CTkFont("Courier New", 15, "bold"),
+                         text_color=DIM).pack(pady=(9, 2))
+            lbl = ctk.CTkLabel(box, text="—",
+                               font=ctk.CTkFont("Courier New", 14, "bold"),
                                text_color=color)
-            lbl.pack(pady=(0, 10))
+            lbl.pack(pady=(0, 9))
             self._metric_labels[label] = lbl
 
         sub = ctk.CTkFrame(card, fg_color="transparent")
-        sub.pack(fill="x", padx=16, pady=(0, 4))
+        sub.pack(fill="x", padx=16)
 
-        self._lbl_open_pos = ctk.CTkLabel(sub, text="Positions ouvertes : 0",
+        self._lbl_open_pos = ctk.CTkLabel(sub, text="Positions : 0",
                                           font=ctk.CTkFont("Courier New", 11),
                                           text_color=DIM)
         self._lbl_open_pos.pack(side="left")
 
-        self._lbl_total_trades = ctk.CTkLabel(sub, text="Total trades : 0",
+        self._lbl_total_trades = ctk.CTkLabel(sub, text="Trades : 0",
                                               font=ctk.CTkFont("Courier New", 11),
                                               text_color=DIM)
         self._lbl_total_trades.pack(side="right")
 
         self._lbl_flag = ctk.CTkLabel(card, text="▶  TRADING ACTIF",
-                                      font=ctk.CTkFont("Courier New", 13, "bold"),
+                                      font=ctk.CTkFont("Courier New", 12, "bold"),
                                       text_color=GREEN)
-        self._lbl_flag.pack(padx=16, pady=(4, 14))
+        self._lbl_flag.pack(padx=16, pady=(6, 12))
 
-    # ── Panel: Scan ────────────────────────────────────────────
+    # ── Row 1 — Positions Live (full width) ────────────────────
+
+    def _build_positions(self, parent):
+        card = self._card(parent, "📈  POSITIONS LIVE  —  Alpaca temps réel",
+                          1, 0, colspan=2)
+
+        # Header row
+        hdr = ctk.CTkFrame(card, fg_color=ROW_ALT, corner_radius=4)
+        hdr.pack(fill="x", padx=16, pady=(0, 2))
+        for txt, w in [("SYMBOL", 90), ("SIDE", 70), ("QTÉ", 60),
+                       ("ENTRÉE", 100), ("PRIX ACT.", 100),
+                       ("VALEUR", 110), ("P&L NON-RÉALISÉ", 160), ("%", 80)]:
+            ctk.CTkLabel(hdr, text=txt,
+                         font=ctk.CTkFont("Courier New", 9, "bold"),
+                         text_color=DIM, width=w).pack(side="left", padx=5, pady=5)
+
+        self._pos_body = ctk.CTkFrame(card, fg_color="transparent", height=70)
+        self._pos_body.pack(fill="x", padx=16, pady=(0, 12))
+        self._pos_body.pack_propagate(False)
+
+        # Initial placeholder
+        self._lbl_no_pos = ctk.CTkLabel(self._pos_body,
+                                        text="Aucune position ouverte en ce moment.",
+                                        font=ctk.CTkFont("Courier New", 11),
+                                        text_color=DIM)
+        self._lbl_no_pos.pack(pady=18)
+
+    # ── Row 2 — Scan ───────────────────────────────────────────
 
     def _build_scan(self, parent):
-        card = self._card(parent, "📡  DERNIER SCAN MARCHÉ", 1, 0)
+        card = self._card(parent, "📡  DERNIER SCAN MARCHÉ", 2, 0)
 
-        self._lbl_scan_ts = ctk.CTkLabel(card, text="Aucun scan enregistré",
+        self._lbl_scan_ts = ctk.CTkLabel(card, text="Aucun scan",
                                          font=ctk.CTkFont("Courier New", 10),
                                          text_color=DIM)
-        self._lbl_scan_ts.pack(padx=16, pady=(0, 6))
+        self._lbl_scan_ts.pack(padx=16, pady=(0, 4))
 
-        # Table header
-        hdr = ctk.CTkFrame(card, fg_color=ROW_ALT, corner_radius=0)
+        hdr = ctk.CTkFrame(card, fg_color=ROW_ALT, corner_radius=4)
         hdr.pack(fill="x", padx=16)
         for txt, w in [("ASSET", 90), ("PRIX", 100), ("RSI", 55), ("TREND", 90), ("BIAS", 90)]:
             ctk.CTkLabel(hdr, text=txt,
                          font=ctk.CTkFont("Courier New", 9, "bold"),
-                         text_color=DIM, width=w).pack(side="left", padx=4, pady=5)
+                         text_color=DIM, width=w).pack(side="left", padx=4, pady=4)
 
         self._scan_body = ctk.CTkFrame(card, fg_color="transparent")
-        self._scan_body.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._scan_body.pack(fill="both", expand=True, padx=16, pady=(2, 12))
 
-    # ── Panel: Trades ──────────────────────────────────────────
+    # ── Row 2 — Trades ─────────────────────────────────────────
 
     def _build_trades(self, parent):
-        card = self._card(parent, "📊  DERNIERS TRADES", 1, 1)
-
+        card = self._card(parent, "📊  DERNIERS TRADES FERMÉS", 2, 1)
         self._trades_scroll = ctk.CTkScrollableFrame(card, fg_color="transparent")
-        self._trades_scroll.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+        self._trades_scroll.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
-    # ── Panel: Actions ─────────────────────────────────────────
+    # ── Row 3 — Actions ────────────────────────────────────────
 
     def _build_actions(self, parent):
-        bar = ctk.CTkFrame(parent, fg_color=PANEL, corner_radius=10, height=72)
-        bar.grid(row=2, column=0, columnspan=2, padx=6, pady=6, sticky="ew")
+        bar = ctk.CTkFrame(parent, fg_color=PANEL, corner_radius=10, height=68)
+        bar.grid(row=3, column=0, columnspan=2, padx=6, pady=5, sticky="ew")
         bar.pack_propagate(False)
 
-        btn_kw = dict(font=ctk.CTkFont("Courier New", 12, "bold"),
-                      corner_radius=7, width=165, height=44)
+        kw = dict(font=ctk.CTkFont("Courier New", 12, "bold"),
+                  corner_radius=7, width=165, height=42)
 
         self._btn_toggle = ctk.CTkButton(
             bar, text="⏸  PAUSE BOT",
             fg_color=RED, hover_color="#cc2222",
-            command=self._on_toggle, **btn_kw)
-        self._btn_toggle.pack(side="left", padx=16, pady=14)
+            command=self._on_toggle, **kw)
+        self._btn_toggle.pack(side="left", padx=16, pady=13)
 
         self._btn_scan = ctk.CTkButton(
             bar, text="🔍  SCAN NOW",
             fg_color="#1a3a5c", hover_color="#0d2a4a",
-            command=self._on_scan, **btn_kw)
-        self._btn_scan.pack(side="left", padx=6, pady=14)
+            command=self._on_scan, **kw)
+        self._btn_scan.pack(side="left", padx=6, pady=13)
 
         ctk.CTkButton(
             bar, text="↻  REFRESH",
             fg_color="#1a2a3a", hover_color="#0d1a2a",
-            command=self._on_force_refresh, **btn_kw).pack(side="left", padx=6, pady=14)
+            command=self._on_force_refresh, **kw).pack(side="left", padx=6, pady=13)
 
         self._lbl_action = ctk.CTkLabel(bar, text="",
                                         font=ctk.CTkFont("Courier New", 11),
                                         text_color=GREEN)
         self._lbl_action.pack(side="left", padx=16)
 
-    # ── Background refresh loop ────────────────────────────────
+    # ── Background refresh ─────────────────────────────────────
 
     def _start_bg_refresh(self):
         def loop():
             while True:
                 self._fetch()
-                for i in range(self.REFRESH_SEC, 0, -1):
+                for i in range(REFRESH_SEC, 0, -1):
                     self._countdown = i
                     time.sleep(1)
         threading.Thread(target=loop, daemon=True).start()
@@ -289,10 +306,15 @@ class AegisApp(ctk.CTk):
 
     def _fetch(self):
         try:
-            self._data = {
-                "state":     _get("/api/state"),
-                "portfolio": _get("/api/portfolio"),
-                "scan":      _get("/api/scan"),
+            state_data  = _get("/api/state")
+            port_data   = _get("/api/portfolio")
+            scan_data   = _get("/api/scan")
+            pos_data    = _get("/api/positions")
+            self._data  = {
+                "state":     state_data,
+                "portfolio": port_data,
+                "scan":      scan_data,
+                "positions": pos_data,
             }
             self._connected = True
             self.after(0, self._refresh_ui)
@@ -301,7 +323,7 @@ class AegisApp(ctk.CTk):
             self.after(0, lambda: self._lbl_status.configure(
                 text="● HORS LIGNE", text_color=RED))
 
-    # ── UI refresh (main thread) ───────────────────────────────
+    # ── UI update (main thread) ────────────────────────────────
 
     def _refresh_ui(self):
         now = datetime.now().strftime("%H:%M:%S")
@@ -311,6 +333,7 @@ class AegisApp(ctk.CTk):
 
         self._update_agents()
         self._update_portfolio()
+        self._update_positions()
         self._update_scan()
         self._update_trades()
 
@@ -334,11 +357,11 @@ class AegisApp(ctk.CTk):
     def _update_portfolio(self):
         port  = self._data.get("portfolio", {})
         snap  = port.get("portfolio", {})
-        pnl   = port.get("total_pnl",  0)
-        wr    = port.get("win_rate",    0)
-        total = port.get("total_trades", 0)
-        eq    = snap.get("total_equity", 0)
-        cash  = snap.get("cash",         0)
+        pnl   = port.get("total_pnl",    0)
+        wr    = port.get("win_rate",      0)
+        total = port.get("total_trades",  0)
+        eq    = snap.get("total_equity",  0)
+        cash  = snap.get("cash",          0)
 
         self._metric_labels["EQUITY"].configure(
             text=f"${eq:,.0f}" if eq else "—", text_color=CYAN)
@@ -347,40 +370,95 @@ class AegisApp(ctk.CTk):
         sign = "+" if pnl >= 0 else ""
         self._metric_labels["P&L TOTAL"].configure(
             text=f"{sign}${pnl:,.2f}" if total else "—",
-            text_color=(GREEN if pnl >= 0 else RED))
+            text_color=GREEN if pnl >= 0 else RED)
         self._metric_labels["WIN RATE"].configure(
             text=f"{wr}%" if total else "—",
-            text_color=(GREEN if wr >= 60 else YELLOW if wr >= 45 else RED))
+            text_color=GREEN if wr >= 60 else YELLOW if wr >= 45 else RED)
 
         open_t = port.get("open_trades", [])
-        self._lbl_open_pos.configure(text=f"Positions ouvertes : {len(open_t)}")
-        self._lbl_total_trades.configure(text=f"Total trades : {total}")
+        self._lbl_open_pos.configure(text=f"Positions : {len(open_t)}")
+        self._lbl_total_trades.configure(text=f"Trades : {total}")
 
-        scan    = self._data.get("scan", {})
-        active  = scan.get("trading_active", True)
-        ks      = scan.get("kill_switch", False)
+        scan   = self._data.get("scan", {})
+        active = scan.get("trading_active", True)
+        ks     = scan.get("kill_switch",    False)
 
         if ks:
             self._lbl_flag.configure(text="⛔  KILL SWITCH ACTIF", text_color=RED)
             self._btn_toggle.configure(state="disabled")
         elif active:
-            self._lbl_flag.configure(text="▶  TRADING ACTIF", text_color=GREEN)
+            self._lbl_flag.configure(text="▶  TRADING ACTIF",     text_color=GREEN)
             self._btn_toggle.configure(
-                text="⏸  PAUSE BOT", fg_color=RED, hover_color="#cc2222",
-                state="normal")
+                text="⏸  PAUSE BOT", fg_color=RED, hover_color="#cc2222", state="normal")
         else:
-            self._lbl_flag.configure(text="⏸  TRADING SUSPENDU", text_color=ORANGE)
+            self._lbl_flag.configure(text="⏸  TRADING SUSPENDU",  text_color=ORANGE)
             self._btn_toggle.configure(
-                text="▶  REPRENDRE", fg_color="#00aa44", hover_color="#008833",
-                state="normal")
+                text="▶  REPRENDRE", fg_color="#00aa44", hover_color="#008833", state="normal")
+
+    def _update_positions(self):
+        pos_data  = self._data.get("positions", {})
+        positions = pos_data.get("positions", [])
+        total_upl = pos_data.get("total_upl", 0)
+
+        for w in self._pos_body.winfo_children():
+            w.destroy()
+
+        if not positions:
+            self._pos_body.configure(height=60)
+            ctk.CTkLabel(self._pos_body,
+                         text="Aucune position ouverte en ce moment.",
+                         font=ctk.CTkFont("Courier New", 11),
+                         text_color=DIM).pack(pady=16)
+            return
+
+        # Resize body to fit rows
+        self._pos_body.configure(height=max(60, len(positions) * 38 + 4))
+
+        for idx, p in enumerate(positions):
+            upl   = p.get("unrealized_pl",  0)
+            uplpc = p.get("unrealized_plpc", 0) * 100
+            side  = str(p.get("side", "")).replace("PositionSide.", "").upper()
+            bg    = PANEL if idx % 2 == 0 else ROW_ALT
+
+            row = ctk.CTkFrame(self._pos_body, fg_color=bg, corner_radius=4)
+            row.pack(fill="x", pady=1)
+
+            pnl_color = GREEN if upl >= 0 else RED
+            sign      = "+" if upl >= 0 else ""
+            side_col  = GREEN if side == "LONG" else RED
+
+            for txt, color, w in [
+                (p.get("symbol", "?"),           TEXT,      90),
+                (side,                            side_col,  70),
+                (str(int(p.get("qty", 0))),       DIM,       60),
+                (f"${p.get('avg_entry', 0):,.2f}", DIM,     100),
+                (f"${p.get('current_price',0):,.2f}", CYAN,  100),
+                (f"${p.get('market_value',0):,.0f}", TEXT,   110),
+                (f"{sign}${upl:,.2f}",            pnl_color, 160),
+                (f"{sign}{uplpc:.1f}%",            pnl_color,  80),
+            ]:
+                ctk.CTkLabel(row, text=txt,
+                             font=ctk.CTkFont("Courier New", 11, "bold" if w == 90 else "normal"),
+                             text_color=color, width=w).pack(side="left", padx=5, pady=7)
+
+        # Summary line
+        if len(positions) > 1:
+            summary = ctk.CTkFrame(self._pos_body, fg_color="transparent")
+            summary.pack(fill="x", pady=(2, 0))
+            sign = "+" if total_upl >= 0 else ""
+            ctk.CTkLabel(summary,
+                         text=f"P&L non-réalisé total : {sign}${total_upl:,.2f}",
+                         font=ctk.CTkFont("Courier New", 11, "bold"),
+                         text_color=GREEN if total_upl >= 0 else RED).pack(
+                side="right", padx=8, pady=2)
 
     def _update_scan(self):
         scan   = self._data.get("scan", {})
         last   = scan.get("last_scan", {})
-        ts     = last.get("timestamp", "Aucun scan enregistré")
-        assets = last.get("assets", {})
+        ts     = last.get("timestamp",  "Aucun scan")
+        assets = last.get("assets",     {})
 
-        self._lbl_scan_ts.configure(text=f"Dernier scan : {ts}")
+        self._lbl_scan_ts.configure(text=f"Scan : {ts}")
 
         for w in self._scan_body.winfo_children():
             w.destroy()
@@ -394,16 +472,16 @@ class AegisApp(ctk.CTk):
             t_sym   = "▲" if trend == "bull" else "▼" if trend == "bear" else "→"
             t_color = GREEN if trend == "bull" else RED if trend == "bear" else YELLOW
             b_color = GREEN if "bull" in str(bias) else RED if "bear" in str(bias) else YELLOW
-            rsi_color = (RED if rsi > 70 else GREEN if rsi < 30 else TEXT)
+            rsi_c   = RED if rsi > 70 else GREEN if rsi < 30 else TEXT
             bg_row  = PANEL if idx % 2 == 0 else ROW_ALT
 
             row = ctk.CTkFrame(self._scan_body, fg_color=bg_row, corner_radius=4)
             row.pack(fill="x", pady=1)
 
             for txt, color, w in [
-                (asset,              TEXT,      90),
-                (f"${price:,.1f}",   CYAN,     100),
-                (str(int(rsi)),      rsi_color,  55),
+                (asset,              TEXT,       90),
+                (f"${price:,.1f}",   CYAN,      100),
+                (str(int(rsi)),      rsi_c,      55),
                 (f"{t_sym} {trend}", t_color,    90),
                 (str(bias),          b_color,    90),
             ]:
@@ -427,12 +505,12 @@ class AegisApp(ctk.CTk):
             return
 
         for idx, t in enumerate(reversed(closed)):
-            pnl_v   = t.get("pnl", 0) or 0
-            sign    = "+" if pnl_v >= 0 else ""
-            color   = GREEN if pnl_v >= 0 else RED
-            emoji   = "✅" if pnl_v >= 0 else "❌"
-            date    = (t.get("closed_at") or "—")[:10]
-            bg_row  = PANEL if idx % 2 == 0 else ROW_ALT
+            pnl_v  = t.get("pnl", 0) or 0
+            sign   = "+" if pnl_v >= 0 else ""
+            color  = GREEN if pnl_v >= 0 else RED
+            emoji  = "✅" if pnl_v >= 0 else "❌"
+            date   = (t.get("closed_at") or "—")[:10]
+            bg_row = PANEL if idx % 2 == 0 else ROW_ALT
 
             row = ctk.CTkFrame(self._trades_scroll, fg_color=bg_row, corner_radius=5)
             row.pack(fill="x", pady=2)
@@ -448,12 +526,11 @@ class AegisApp(ctk.CTk):
                          font=ctk.CTkFont("Courier New", 12, "bold"),
                          text_color=color).pack(side="left", padx=8)
 
-            ctk.CTkLabel(row,
-                         text=date,
+            ctk.CTkLabel(row, text=date,
                          font=ctk.CTkFont("Courier New", 10),
                          text_color=DIM).pack(side="right", padx=14)
 
-    # ── Button actions ─────────────────────────────────────────
+    # ── Buttons ────────────────────────────────────────────────
 
     def _on_toggle(self):
         scan   = self._data.get("scan", {})
@@ -468,8 +545,8 @@ class AegisApp(ctk.CTk):
                 self.after(0, lambda: (
                     self._lbl_action.configure(text=f"✓  {msg}", text_color=GREEN),
                     self._btn_toggle.configure(state="normal"),
-                    self._fetch(),
                 ))
+                self._fetch()
             except Exception as e:
                 self.after(0, lambda: (
                     self._lbl_action.configure(text=f"❌  {e}", text_color=RED),
@@ -508,5 +585,4 @@ class AegisApp(ctk.CTk):
 # ── Entry point ────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app = AegisApp()
-    app.mainloop()
+    AegisApp().mainloop()

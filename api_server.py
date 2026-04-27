@@ -108,6 +108,27 @@ def api_command():
     return jsonify({"ok": False, "msg": f"Commande inconnue: {cmd}"}), 400
 
 
+# ── GET /api/positions — live Alpaca call ─────────────────────
+
+@app.route("/api/positions")
+def api_positions():
+    try:
+        from broker import get_positions, get_account
+        positions = get_positions()
+        account   = get_account()
+        total_upl = sum(p["unrealized_pl"] for p in positions)
+        return jsonify({
+            "positions":   positions,
+            "count":       len(positions),
+            "total_upl":   round(total_upl, 2),
+            "equity":      account["equity"],
+            "cash":        account["cash"],
+        })
+    except Exception as e:
+        return jsonify({"positions": [], "count": 0, "total_upl": 0,
+                        "equity": 0, "cash": 0, "error": str(e)}), 200
+
+
 # ── GET /health ────────────────────────────────────────────────
 
 @app.route("/health")
