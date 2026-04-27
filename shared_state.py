@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-STATE_PATH = "agent_state.json"
+_BASE      = Path(__file__).parent
+STATE_PATH = str(_BASE / "agent_state.json")
 
 _DEFAULT = {
     "agents": {
@@ -26,7 +27,7 @@ _DEFAULT = {
 
 
 def load_state() -> dict:
-    p = Path(STATE_PATH)
+    p = Path(STATE_PATH).resolve()
     if not p.exists():
         save_state(_DEFAULT)
         return _DEFAULT.copy()

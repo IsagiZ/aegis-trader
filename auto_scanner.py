@@ -14,8 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from notify import send as _notify
 
-os.chdir(Path(__file__).parent)
-
 from market_monitor import run_market_scan, TechnicalSnapshot
 from broker import (
     get_account, get_positions, get_open_symbols,

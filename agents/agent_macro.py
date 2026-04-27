@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-os.chdir(Path(__file__).parent.parent)
 
 from broker import get_positions
 from shared_state import update_agent, load_state, save_state

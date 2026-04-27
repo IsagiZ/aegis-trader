@@ -9,8 +9,6 @@ import requests
 from datetime import datetime, timezone
 from pathlib import Path
 
-os.chdir(Path(__file__).parent)
-
 TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN", "8476245241:AAFLK7T0C9A-vuHGbZfDmwPfVep9b0FidhI")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID",   "7863773047")
 BASE    = f"https://api.telegram.org/bot{TOKEN}"

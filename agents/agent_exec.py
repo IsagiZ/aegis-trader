@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-os.chdir(Path(__file__).parent.parent)
 
 from broker import get_open_symbols, detect_close_reason, get_account, get_positions
 from trading_logger import get_open_trades, close_trade, write_post_mortem, update_portfolio_snapshot
