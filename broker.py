@@ -41,6 +41,8 @@ def get_positions() -> list:
     ]
 
 
+CRYPTO_SYMBOLS = {"BTCUSD", "ETHUSD", "SOLUSD", "BTC/USD", "ETH/USD", "SOL/USD"}
+
 def submit_bracket_order(
     symbol: str,
     qty: int,
@@ -51,14 +53,16 @@ def submit_bracket_order(
     """
     Submits a market bracket order with OCO TP + SL.
     Returns the Alpaca order dict.
+    Crypto requires GTC; equities use DAY.
     """
     side = OrderSide.BUY if direction == "long" else OrderSide.SELL
+    tif  = TimeInForce.GTC if symbol in CRYPTO_SYMBOLS else TimeInForce.DAY
 
     order_data = MarketOrderRequest(
         symbol=symbol,
         qty=qty,
         side=side,
-        time_in_force=TimeInForce.DAY,
+        time_in_force=tif,
         order_class=OrderClass.BRACKET,
         take_profit=TakeProfitRequest(limit_price=round(take_profit, 2)),
         stop_loss=StopLossRequest(stop_price=round(stop_loss, 2)),
