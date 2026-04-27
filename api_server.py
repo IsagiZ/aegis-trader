@@ -46,6 +46,24 @@ def api_state():
 
 @app.route("/api/portfolio")
 def api_portfolio():
+    # Live account data straight from Alpaca — always matches the Alpaca dashboard
+    try:
+        from broker import get_account, get_positions
+        account   = get_account()
+        positions = get_positions()
+        live_snap = {
+            "total_equity":     account["equity"],
+            "cash":             account["cash"],
+            "buying_power":     account["buying_power"],
+            "open_positions":   [p["symbol"] for p in positions],
+            "core_equity":      round(account["equity"] * 0.90, 4),
+            "satellite_equity": round(account["equity"] * 0.10, 4),
+        }
+    except Exception as e:
+        # Fall back to cached snapshot if Alpaca is unreachable
+        tlog     = _load("trading_log.json")
+        live_snap = tlog.get("portfolio_snapshot", {})
+
     tlog   = _load("trading_log.json")
     trades = tlog.get("trades", [])
     closed = [t for t in trades if t.get("status") == "closed"]
@@ -53,12 +71,12 @@ def api_portfolio():
     pnls   = [t.get("pnl", 0) or 0 for t in closed]
     wins   = [p for p in pnls if p > 0]
     return jsonify({
-        "portfolio":    tlog.get("portfolio_snapshot", {}),
-        "open_trades":  open_t,
+        "portfolio":     live_snap,
+        "open_trades":   open_t,
         "closed_trades": closed[-10:],
-        "total_pnl":    round(sum(pnls), 2),
-        "win_rate":     round(len(wins) / len(pnls) * 100) if pnls else 0,
-        "total_trades": len(closed),
+        "total_pnl":     round(sum(pnls), 2),
+        "win_rate":      round(len(wins) / len(pnls) * 100) if pnls else 0,
+        "total_trades":  len(closed),
     })
 
 

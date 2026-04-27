@@ -102,7 +102,7 @@
   /* ── Portfolio metrics ───────────────────────────────────── */
   #metrics-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 8px;
     margin-bottom: 10px;
   }
@@ -296,6 +296,10 @@
         <div class="metric-label">WIN RATE</div>
         <div class="metric-val yellow" id="m-wr">—</div>
       </div>
+      <div class="metric-box">
+        <div class="metric-label">BUYING POWER</div>
+        <div class="metric-val" style="color:var(--blue)" id="m-bp">—</div>
+      </div>
     </div>
     <div id="portfolio-sub">
       <span id="lbl-pos">Positions : 0</span>
@@ -476,8 +480,10 @@ function renderPortfolio() {
   const eq    = snap.total_equity || 0;
   const cash  = snap.cash         || 0;
 
+  const bp = snap.buying_power || 0;
   document.getElementById("m-equity").textContent = eq   ? `$${fmt(eq)}`   : "—";
   document.getElementById("m-cash").textContent   = cash ? `$${fmt(cash)}` : "—";
+  document.getElementById("m-bp").textContent     = bp   ? `$${fmt(bp)}`   : "—";
 
   const sign = pnl >= 0 ? "+" : "";
   const pnlEl = document.getElementById("m-pnl");
