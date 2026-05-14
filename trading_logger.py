@@ -157,3 +157,58 @@ def get_open_trades() -> list:
 
 def get_error_patterns() -> list:
     return [ep for ep in _load().get("error_patterns", []) if ep["active"]]
+
+
+def get_consecutive_losses(asset: str) -> int:
+    """
+    Retourne le nombre de pertes consécutives sur un actif
+    (en partant du trade le plus récent vers le passé).
+    """
+    data   = _load()
+    closed = [t for t in data["trades"]
+              if t["status"] == "closed" and t["asset"] == asset and t.get("pnl") is not None]
+    closed.sort(key=lambda t: t.get("closed_at", ""), reverse=True)
+    streak = 0
+    for t in closed:
+        if t["pnl"] < 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def add_cooldown(asset: str, hours: int = 24):
+    """
+    Ajoute un cooldown pour un actif (ne plus trader pendant X heures).
+    """
+    data = _load()
+    cooldowns = data.setdefault("cooldowns", {})
+    expires_at = datetime.now(timezone.utc).isoformat()
+    # Recalculer l'heure d'expiration
+    from datetime import timedelta
+    expire_dt = datetime.now(timezone.utc) + timedelta(hours=hours)
+    cooldowns[asset] = {
+        "expires_at" : expire_dt.isoformat(),
+        "reason"     : f"{get_consecutive_losses(asset)} pertes consécutives",
+        "added_at"   : datetime.now(timezone.utc).isoformat(),
+    }
+    _save(data)
+
+
+def is_in_cooldown(asset: str) -> "str|None":
+    """
+    Retourne la raison du cooldown si actif, None sinon.
+    """
+    data      = _load()
+    cooldowns = data.get("cooldowns", {})
+    cd        = cooldowns.get(asset)
+    if not cd:
+        return None
+    try:
+        expires = datetime.fromisoformat(cd["expires_at"])
+        if datetime.now(timezone.utc) < expires:
+            remaining = (expires - datetime.now(timezone.utc)).total_seconds() / 3600
+            return f"Cooldown actif ({remaining:.1f}h restantes) — {cd.get('reason', '')}"
+    except Exception:
+        pass
+    return None

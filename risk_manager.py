@@ -46,9 +46,15 @@ def compute_position(
         return None
 
     max_risk_usd = segment_equity * MAX_RISK_PER_TRADE
-    shares = int(max_risk_usd / risk_per_share)
-    if shares < 1:
-        return None
+    # Crypto (satellite) : fractions autorisées (ex: 0.029 BTC)
+    if segment == "satellite":
+        shares = round(max_risk_usd / risk_per_share, 4)
+        if shares < 0.0001:
+            return None
+    else:
+        shares = int(max_risk_usd / risk_per_share)
+        if shares < 1:
+            return None
 
     return {
         "shares": shares,

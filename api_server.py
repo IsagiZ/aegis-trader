@@ -147,6 +147,23 @@ def api_positions():
                         "equity": 0, "cash": 0, "error": str(e)}), 200
 
 
+# ── GET /api/activity — journal en temps réel ─────────────────
+
+@app.route("/api/activity")
+def api_activity():
+    try:
+        p = BASE / "activity.log"
+        if not p.exists():
+            return jsonify({"lines": [], "total": 0})
+        with open(p, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        recent = [l.rstrip() for l in lines[-80:] if l.strip()]
+        recent.reverse()   # plus récent en premier
+        return jsonify({"lines": recent, "total": len(lines)})
+    except Exception as e:
+        return jsonify({"lines": [], "total": 0, "error": str(e)})
+
+
 # ── GET /health ────────────────────────────────────────────────
 
 @app.route("/health")

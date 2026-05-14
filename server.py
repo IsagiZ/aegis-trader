@@ -53,6 +53,23 @@ for agent_name, module_path, fn_name in [
     except Exception as e:
         print(f"[{agent_name}] import error: {e}", flush=True)
 
+# ── Auto-ping pour garder Render éveillé (free tier) ──────────
+def _self_ping():
+    """Ping /health toutes les 10 min pour éviter le sleep Render."""
+    import requests, time
+    port_p = int(os.environ.get("PORT", "8501"))
+    url    = f"http://localhost:{port_p}/health"
+    time.sleep(30)   # attendre que Flask soit démarré
+    while True:
+        try:
+            requests.get(url, timeout=5)
+        except Exception:
+            pass
+        time.sleep(600)   # 10 minutes
+
+ping_thread = threading.Thread(target=_self_ping, daemon=True)
+ping_thread.start()
+
 # ── API Flask sur $PORT ────────────────────────────────────────
 port = int(os.environ.get("PORT", "8501"))
 print(f"Démarrage API Flask sur port {port}...", flush=True)

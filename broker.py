@@ -15,6 +15,25 @@ from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
 _client = TradingClient(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=True)
 
 
+def get_live_price(symbol: str):
+    """Retourne le prix live depuis Alpaca (dernier trade). Fallback None si indispo."""
+    try:
+        from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
+        from alpaca.data.requests import StockLatestTradeRequest, CryptoLatestTradeRequest
+
+        clean = symbol.replace("/", "")
+        if clean in CRYPTO_SYMBOLS or "/" in symbol:
+            dc   = CryptoHistoricalDataClient()
+            resp = dc.get_crypto_latest_trade(CryptoLatestTradeRequest(symbol_or_symbols=clean))
+            return float(resp[clean].price)
+        else:
+            dc   = StockHistoricalDataClient(ALPACA_API_KEY, ALPACA_SECRET_KEY)
+            resp = dc.get_stock_latest_trade(StockLatestTradeRequest(symbol_or_symbols=symbol))
+            return float(resp[symbol].price)
+    except Exception:
+        return None
+
+
 def get_account() -> dict:
     acc = _client.get_account()
     return {
@@ -45,28 +64,36 @@ CRYPTO_SYMBOLS = {"BTCUSD", "ETHUSD", "SOLUSD", "BTC/USD", "ETH/USD", "SOL/USD"}
 
 def submit_bracket_order(
     symbol: str,
-    qty: int,
+    qty: float,
     direction: str,     # "long" | "short"
     take_profit: float,
     stop_loss: float,
 ) -> dict:
     """
-    Submits a market bracket order with OCO TP + SL.
-    Returns the Alpaca order dict.
-    Crypto requires GTC; equities use DAY.
+    Equities  : bracket order (entry + OCO TP/SL in one call).
+    Crypto    : market order only — Alpaca forbids bracket orders for crypto.
+                SL/TP are monitored and closed manually by the scanner.
     """
     side = OrderSide.BUY if direction == "long" else OrderSide.SELL
     tif  = TimeInForce.GTC if symbol in CRYPTO_SYMBOLS else TimeInForce.DAY
 
-    order_data = MarketOrderRequest(
-        symbol=symbol,
-        qty=qty,
-        side=side,
-        time_in_force=tif,
-        order_class=OrderClass.BRACKET,
-        take_profit=TakeProfitRequest(limit_price=round(take_profit, 2)),
-        stop_loss=StopLossRequest(stop_price=round(stop_loss, 2)),
-    )
+    if symbol in CRYPTO_SYMBOLS:
+        order_data = MarketOrderRequest(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            time_in_force=tif,
+        )
+    else:
+        order_data = MarketOrderRequest(
+            symbol=symbol,
+            qty=int(qty),
+            side=side,
+            time_in_force=tif,
+            order_class=OrderClass.BRACKET,
+            take_profit=TakeProfitRequest(limit_price=round(take_profit, 2)),
+            stop_loss=StopLossRequest(stop_price=round(stop_loss, 2)),
+        )
 
     order = _client.submit_order(order_data)
     return {
@@ -85,6 +112,19 @@ def cancel_all_orders():
 
 def close_position(symbol: str):
     _client.close_position(symbol)
+
+
+def close_partial_position(symbol: str, qty: float):
+    """Close a fraction of an open position via market order in the opposite direction."""
+    clean = symbol.replace("/", "")
+    positions = _client.get_all_positions()
+    pos = next((p for p in positions if p.symbol == clean or p.symbol == symbol), None)
+    if not pos:
+        raise ValueError(f"No open position for {symbol}")
+    side = OrderSide.SELL if str(pos.side).lower() in ("long", "buy") else OrderSide.BUY
+    tif  = TimeInForce.GTC if clean in CRYPTO_SYMBOLS else TimeInForce.DAY
+    order_data = MarketOrderRequest(symbol=clean, qty=qty, side=side, time_in_force=tif)
+    return _client.submit_order(order_data)
 
 
 def get_open_symbols() -> set:

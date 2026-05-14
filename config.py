@@ -17,8 +17,15 @@ SATELLITE_ASSETS = ["BTC/USD"]
 ALL_ASSETS       = CORE_ASSETS + SATELLITE_ASSETS
 
 # ── Risk Protocol ──────────────────────────────────────────────
-MAX_RISK_PER_TRADE = 0.02     # 2% of allocated segment capital
-MIN_RISK_REWARD    = 2.0      # Minimum R:R ratio
+MAX_RISK_PER_TRADE   = 0.03   # 3% of allocated segment capital
+MIN_RISK_REWARD      = 2.0    # Minimum R:R ratio
+CRYPTO_SL_PCT        = 0.04   # 4% SL for crypto (tighter than 20-bar low)
+EQUITY_SL_PCT        = 0.03   # 3% SL for equities
+
+# ── Trailing Stop ──────────────────────────────────────────────
+TRAIL_BREAKEVEN_PCT  = 0.03   # +3% profit → SL remonte au breakeven
+TRAIL_ACTIVE_PCT     = 0.05   # +5% profit → trailing stop activé
+TRAIL_DISTANCE_PCT   = 0.02   # SL trail à 2% sous le prix actuel
 
 # ── Kill Switch Thresholds ─────────────────────────────────────
 VIX_SPIKE_THRESHOLD     = 30.0   # Suspend if VIX > 30

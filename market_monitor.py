@@ -86,7 +86,7 @@ def _key_levels(df: pd.DataFrame, window: int = 20) -> tuple[float, float]:
     return round(float(recent["low"].min()), 4), round(float(recent["high"].max()), 4)
 
 
-def _fetch_bars(asset: str, days: int = 60) -> pd.DataFrame:
+def _fetch_bars(asset: str, days: int = 300) -> pd.DataFrame:
     end   = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
 
@@ -117,10 +117,12 @@ def _analyze_asset(asset: str) -> TechnicalSnapshot:
     rsi  = _rsi(close, RSI_PERIOD)
     price = float(close.iloc[-1])
 
-    # Trend classification
-    if price > e20 > e50 > e200:
+    # Trend classification — alignement court/moyen terme + EMA200 comme filtre long terme
+    # "bull" : prix > EMA20 > EMA50 (momentum haussier confirmé)
+    #          EMA200 utilisée comme filtre additionnel mais pas bloquante
+    if price > e20 and e20 > e50:
         trend = "bull"
-    elif price < e20 < e50 < e200:
+    elif price < e20 and e20 < e50:
         trend = "bear"
     else:
         trend = "neutral"
@@ -133,9 +135,18 @@ def _analyze_asset(asset: str) -> TechnicalSnapshot:
     fibs = _fib_retracements(high_swing, low_swing)
 
     # Directional bias
-    if trend == "bull" and rsi_signal != "overbought":
+    RSI_OB_HARD = 78   # Au-delà → trop risqué même en paper trading
+    RSI_OS_HARD = 22
+
+    if trend == "bull" and rsi < RSI_OB_HARD:
+        # Bull trend : long jusqu'à RSI 78 (inclut momentum fort RSI 70-78)
         bias = "long"
-    elif trend == "bear" and rsi_signal != "oversold":
+    elif trend == "bear" and rsi > RSI_OS_HARD:
+        bias = "short"
+    elif trend == "neutral" and price > e200 and RSI_OS < rsi < 62:
+        # Neutre court terme mais au-dessus de la MA long terme + RSI pas chaud → lean long
+        bias = "long"
+    elif trend == "neutral" and price < e200 and 38 < rsi < RSI_OB:
         bias = "short"
     else:
         bias = "flat"
@@ -176,6 +187,69 @@ def _fetch_vix() -> Optional[float]:
         return float(df["close"].iloc[-1])
     except Exception:
         return None
+
+
+# ── 4H Higher-Timeframe Analysis ──────────────────────────────
+
+def get_4h_bias(asset: str) -> tuple[str, float]:
+    """
+    Fetch hourly bars, resample to 4H, return (trend, atr_pct).
+    trend  : 'bull' | 'bear' | 'neutral'
+    atr_pct: ATR(14) as % of price — high = trending, low = ranging.
+    Fails open (returns 'neutral', 0.0) if data unavailable.
+    """
+    try:
+        end   = datetime.now(timezone.utc)
+        start = end - timedelta(days=45)
+
+        if asset in SATELLITE_ASSETS:
+            req  = CryptoBarsRequest(symbol_or_symbols=asset, timeframe=TimeFrame.Hour,
+                                     start=start, end=end)
+            bars = _crypto_client.get_crypto_bars(req)
+        else:
+            req  = StockBarsRequest(symbol_or_symbols=asset, timeframe=TimeFrame.Hour,
+                                    start=start, end=end, feed=DataFeed.IEX)
+            bars = _stock_client.get_stock_bars(req)
+
+        df = bars.df
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.xs(asset, level="symbol")
+        df.index = pd.to_datetime(df.index, utc=True)
+        df = df.sort_index()
+
+        # Resample 1H → 4H
+        df4 = df.resample("4h").agg(
+            {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+        ).dropna()
+
+        if len(df4) < 20:
+            return "neutral", 0.0
+
+        close = df4["close"]
+        e20   = float(_ema(close, 20).iloc[-1])
+        e50   = float(_ema(close, min(50, len(close) - 1)).iloc[-1])
+        price = float(close.iloc[-1])
+
+        # ATR(14) on 4H
+        tr = pd.DataFrame({
+            "hl": df4["high"] - df4["low"],
+            "hc": (df4["high"] - close.shift()).abs(),
+            "lc": (df4["low"]  - close.shift()).abs(),
+        }).max(axis=1)
+        atr     = float(tr.rolling(14).mean().iloc[-1])
+        atr_pct = round(atr / price * 100, 3)
+
+        if price > e20 > e50:
+            trend = "bull"
+        elif price < e20 < e50:
+            trend = "bear"
+        else:
+            trend = "neutral"
+
+        return trend, atr_pct
+
+    except Exception:
+        return "neutral", 0.0
 
 
 # ── Public Entry Point ─────────────────────────────────────────

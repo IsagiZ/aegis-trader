@@ -97,10 +97,39 @@ def setup_detected(asset: str, direction: str, price: float, rsi: float, label: 
     )
 
 
+def trailing_stop_updated(asset: str, old_sl: float, new_sl: float, price: float, profit_pct: float):
+    if profit_pct >= 5:
+        icon = "🔒"
+        label = "TRAILING STOP actif"
+    else:
+        icon = "✅"
+        label = "SL BREAKEVEN activé"
+    _send(
+        f"{icon} <b>AEGIS — {label}</b>\n\n"
+        f"Actif       : <b>{asset}</b>\n"
+        f"Prix actuel : ${price:,.2f}\n"
+        f"Profit      : +{profit_pct:.1f}%\n"
+        f"Ancien SL   : ${old_sl:,.2f}\n"
+        f"Nouveau SL  : <b>${new_sl:,.2f}</b> {'📈' if new_sl > old_sl else '📉'}\n\n"
+        f"{'🎯 Gains sécurisés — SL remonte avec le prix.' if profit_pct >= 5 else '🛡️ Capital protégé — trade ne peut plus perdre.'}"
+    )
+
+
 def startup():
     _send(
         "⚡ <b>AEGIS DÉMARRÉ</b>\n\n"
         "Tous les agents sont actifs.\n"
         "Surveillance du marché en cours — scan toutes les heures.\n\n"
         "Actifs surveillés : SPY · GLD · SLV · BTC/USD"
+    )
+
+
+def heartbeat(equity: float, open_positions: int, next_scan_min: int = 60):
+    ts = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    _send(
+        f"✅ <b>AEGIS ACTIF</b> — {ts}\n\n"
+        f"💼 Capital      : <b>${equity:,.2f}</b>\n"
+        f"📂 Positions    : <b>{open_positions}</b> ouvertes\n"
+        f"⏱ Prochain scan : dans ~{next_scan_min}min\n\n"
+        f"<i>Le bot tourne en continu sur votre Mac.</i>"
     )
