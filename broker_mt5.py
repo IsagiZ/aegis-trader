@@ -204,6 +204,18 @@ def get_filled_entry_price(order_id: str) -> float:
     return 0.0
 
 
+def cancel_all_orders():
+    """Annule tous les ordres en attente (MT5 : supprime les pending orders)."""
+    _ensure_connected()
+    orders = mt5.orders_get() or []
+    for o in orders:
+        if o.magic == MAGIC_NUMBER:
+            mt5.order_send({
+                "action": mt5.TRADE_ACTION_REMOVE,
+                "order":  o.ticket,
+            })
+
+
 def close_position(symbol: str):
     """Ferme toute la position sur un symbole."""
     _ensure_connected()
