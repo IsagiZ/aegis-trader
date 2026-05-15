@@ -77,20 +77,24 @@ def _compute_levels(snap: TechnicalSnapshot, direction: str) -> tuple[float, flo
 # Condition unique : le marché doit avoir une direction claire (bias != flat).
 SETUP_RULES = {
     "BTC/USD": {
-        "asset"  : "BTC/USD",
-        "segment": "satellite",
+        "asset"      : "BTC/USD",
+        "segment"    : "satellite",
+        "allow_short": True,    # crypto : long + short OK
     },
     "GLD": {
-        "asset"  : "GLD",
-        "segment": "core",
+        "asset"      : "GLD",
+        "segment"    : "core",
+        "allow_short": False,   # ETF : Alpaca Paper ne supporte pas le short
     },
     "SLV": {
-        "asset"  : "SLV",
-        "segment": "core",
+        "asset"      : "SLV",
+        "segment"    : "core",
+        "allow_short": False,
     },
     "SPY": {
-        "asset"  : "SPY",
-        "segment": "core",
+        "asset"      : "SPY",
+        "segment"    : "core",
+        "allow_short": False,
     },
 }
 
@@ -489,6 +493,11 @@ def execute_setup(snap: TechnicalSnapshot, rule: dict, account: dict,
         f"GoldAI validation"
     )
 
+    # ── Vérifier si le short est autorisé sur cet actif ──────
+    if direction == "short" and not rule.get("allow_short", True):
+        _log(f"  Skip {asset} short — short non supporté sur cet actif (ETF)")
+        return False
+
     # ── Vérifier le cooldown (pertes consécutives) ────────────
     cooldown_reason = is_in_cooldown(asset)
     if cooldown_reason:
@@ -634,6 +643,20 @@ def execute_setup(snap: TechnicalSnapshot, rule: dict, account: dict,
     except Exception as e:
         _log(f"  ERREUR soumission ordre {asset}: {e}")
         _notify(f"AEGIS ERREUR {asset}", str(e))
+        # Marquer le trade comme échoué pour ne pas laisser un pending orphelin
+        try:
+            from datetime import datetime, timezone as _tz
+            tlog_err = _load_trading_log()
+            for _t in tlog_err["trades"]:
+                if _t["id"] == trade_id and _t["status"] == "pending":
+                    _t["status"]   = "failed"
+                    _t["closed_at"] = datetime.now(_tz.utc).isoformat()
+                    _t["pnl"]      = 0
+                    _t.setdefault("actual", {})["exit_reason"] = f"order_error: {str(e)[:80]}"
+                    break
+            _save_trading_log(tlog_err)
+        except Exception:
+            pass
         return False
 
 
