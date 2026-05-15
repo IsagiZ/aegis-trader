@@ -46,9 +46,13 @@ def api_state():
 
 @app.route("/api/portfolio")
 def api_portfolio():
-    # Live account data straight from Alpaca — always matches the Alpaca dashboard
+    # Live account data straight from broker (Alpaca or MT5)
     try:
-        from broker import get_account, get_positions
+        from config import BROKER_TYPE
+        if BROKER_TYPE == "mt5":
+            from broker_mt5 import get_account, get_positions
+        else:
+            from broker import get_account, get_positions
         account   = get_account()
         positions = get_positions()
         live_snap = {
@@ -131,7 +135,11 @@ def api_command():
 @app.route("/api/positions")
 def api_positions():
     try:
-        from broker import get_positions, get_account
+        from config import BROKER_TYPE
+        if BROKER_TYPE == "mt5":
+            from broker_mt5 import get_positions, get_account
+        else:
+            from broker import get_positions, get_account
         positions = get_positions()
         account   = get_account()
         total_upl = sum(p["unrealized_pl"] for p in positions)

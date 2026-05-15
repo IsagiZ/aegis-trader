@@ -8,7 +8,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from broker import get_positions
+from config import BROKER_TYPE
+if BROKER_TYPE == "mt5":
+    from broker_mt5 import get_positions
+else:
+    from broker import get_positions
 from shared_state import update_agent, load_state, save_state
 
 INTERVAL = 14400  # 4 heures

@@ -3,6 +3,11 @@ import os
 
 load_dotenv()
 
+# ── Broker selection ───────────────────────────────────────────
+# Set BROKER_TYPE=mt5 in .env or environment to use MetaTrader 5
+# Set BROKER_TYPE=alpaca (default) to use Alpaca Paper Trading
+BROKER_TYPE = os.getenv("BROKER_TYPE", "alpaca").lower()
+
 # ── Alpaca ─────────────────────────────────────────────────────
 ALPACA_API_KEY    = os.getenv("ALPACA_API_KEY")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")

@@ -15,11 +15,19 @@ from pathlib import Path
 from notify import send as _notify
 
 from market_monitor import run_market_scan, TechnicalSnapshot, get_4h_bias
-from broker import (
-    get_account, get_positions, get_open_symbols,
-    submit_bracket_order, detect_close_reason, get_filled_entry_price,
-    close_position, close_partial_position, get_live_price, CRYPTO_SYMBOLS,
-)
+from config import BROKER_TYPE
+if BROKER_TYPE == "mt5":
+    from broker_mt5 import (
+        get_account, get_positions, get_open_symbols,
+        submit_bracket_order, detect_close_reason, get_filled_entry_price,
+        close_position, close_partial_position, get_live_price, CRYPTO_SYMBOLS,
+    )
+else:
+    from broker import (
+        get_account, get_positions, get_open_symbols,
+        submit_bracket_order, detect_close_reason, get_filled_entry_price,
+        close_position, close_partial_position, get_live_price, CRYPTO_SYMBOLS,
+    )
 from risk_manager import compute_position, validate_structure
 from trading_logger import (
     pre_trade_check, log_pre_trade, open_trade,
@@ -75,6 +83,8 @@ def _compute_levels(snap: TechnicalSnapshot, direction: str) -> tuple[float, flo
 # ── Règles autonomes — direction déterminée par snap.bias + GoldAI ──
 # Le bot analyse lui-même chaque actif et décide long ou short.
 # Condition unique : le marché doit avoir une direction claire (bias != flat).
+_MT5 = (BROKER_TYPE == "mt5")
+
 SETUP_RULES = {
     "BTC/USD": {
         "asset"      : "BTC/USD",
@@ -84,17 +94,17 @@ SETUP_RULES = {
     "GLD": {
         "asset"      : "GLD",
         "segment"    : "core",
-        "allow_short": False,   # ETF : Alpaca Paper ne supporte pas le short
+        "allow_short": _MT5,    # MT5 (XAUUSD CFD) : short OK — Alpaca ETF : interdit
     },
     "SLV": {
         "asset"      : "SLV",
         "segment"    : "core",
-        "allow_short": False,
+        "allow_short": _MT5,    # idem
     },
     "SPY": {
         "asset"      : "SPY",
         "segment"    : "core",
-        "allow_short": False,
+        "allow_short": _MT5,    # S&P 500 CFD sur MT5 : short OK
     },
 }
 
